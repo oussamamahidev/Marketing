@@ -24,6 +24,9 @@ Define a narrow typed MetaAdsGateway port consumed by application use cases. Inf
 - supports safe reconciliation lookups; and
 - does not decide seller authorization, budget/stock policy, or whether a mutation is approved.
 
+Neither the Domain nor Application layer imports MCP protocol details, Meta SDK types,
+or provider payloads; those remain Infrastructure adapter concerns.
+
 Read capabilities are implemented before write capabilities. A model never receives a generic MCP tool or direct provider credential.
 
 ## Alternatives considered

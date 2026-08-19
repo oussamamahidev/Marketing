@@ -9,6 +9,12 @@
 .env.*
 !.env.example
 
+# Local secrets and private keys
+*.pem
+*.key
+*.p12
+*.pfx
+
 # Python environments and artifacts
 .venv/
 __pycache__/

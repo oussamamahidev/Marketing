@@ -7,6 +7,7 @@ The architecture baseline and implementation guardrails for the marketing assist
 - [Architecture overview](docs/architecture/overview.md)
 - [Domain glossary](docs/architecture/domain-glossary.md)
 - [Non-functional requirements](docs/architecture/non-functional-requirements.md)
+- [Delivered-order profitability](docs/architecture/profitability.md)
 - [Architecture decision records](docs/adr/)
 
 ## Repository foundation

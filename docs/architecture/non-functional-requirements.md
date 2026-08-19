@@ -12,6 +12,16 @@ TESTED BY: P00-T documentation review, P00-V acceptance validation, and later se
 
 These are initial MVP targets and acceptance expectations. Numeric service-level objectives must be validated against real traffic, Meta limits, and platform policy before they become contractual external SLAs. A slower external provider never permits a safety control to be skipped.
 
+## Binding numeric decisions
+
+`BUSINESS_CONSTANTS.md` is the binding source for currencies, thresholds, limits,
+cadences, and recovery objectives. This document deliberately does not invent or
+duplicate those values. A value marked `<<SET>>` remains a product-owner decision:
+later configuration startup must fail with a clear configuration error when it is
+required but unresolved, and P05 must not implement a deterministic policy that
+depends on it. Those unresolved P05 decisions do not block P00-P04 unless a specific
+prompt depends on the affected constant.
+
 ## Security and tenant isolation
 
 - Every seller-owned read and write is authorized and constrained by seller_id at the query or service boundary. A client-provided identifier alone is never sufficient.
@@ -74,6 +84,9 @@ P02 implements this canonical contract. P00 freezes these intended codes and cat
 
 ## Logging, tracing, and metrics
 
+Observability uses structured logs, OpenTelemetry-compatible traces, error tracking,
+and low-cardinality metrics suitable for Prometheus/Grafana.
+
 ### Logging
 
 - Emit structured logs for lifecycle and dependency-failure events with request_id and correlation_id.
@@ -114,6 +127,19 @@ Metrics use low-cardinality labels such as operation, dependency, outcome class,
 | LLM output can be incorrect, maliciously influenced, or unavailable. | Unsafe or low-quality suggestions are possible. | Use sanitized typed context, strict schemas, deterministic policy, human approval, evaluation, and graceful degradation. |
 | Background jobs can be delayed or duplicated. | Snapshots or reconciliations may lag. | Persist job-relevant state, use idempotency, monitor freshness, and bound retries. |
 | Traffic or analytical retention may grow beyond transactional capacity. | Seller analytics can become slow or costly. | Measure query load and use the documented PostgreSQL-to-analytical-storage replacement trigger. |
+
+## Meta launch dependencies
+
+The following external processes can block launch even when engineering work is
+complete. The product owner should start them early and run them in parallel with
+engineering, beginning in P00 rather than waiting for the Meta-connection phase.
+
+| Launch risk | Why it matters | Required action |
+| --- | --- | --- |
+| Meta Business verification | An unverified business can prevent production advertising access. | Start verification early and track its status as a launch dependency. |
+| Meta App Review and required permissions | Production use may require App Review for `ads_management` and `ads_read`. | Submit the required permissions early and retain the review evidence. |
+| Meta advertising policy compliance | Generated ad copy, creatives, and targeting must comply with Meta advertising policies. | Include policy review in product and creative readiness; block non-compliant publication. |
+| Review or resubmission delay | A review can require clarification, changes, or resubmission. | Plan schedule contingency and continue engineering work in parallel. |
 
 ## Edge-case expectations
 

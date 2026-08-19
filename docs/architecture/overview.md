@@ -14,6 +14,19 @@ This document is the P00 architecture baseline. It defines the minimum safe, pro
 
 The system helps a seller create, approve, publish, observe, and improve Meta campaigns using Maroc Affiliate commerce data. It is an assistant, not an autonomous advertising buyer.
 
+## Binding context and business decisions
+
+`PROJECT_CONTEXT.md` and `BUSINESS_CONSTANTS.md` are binding companions to this
+architecture baseline. The existing Maroc Affiliate identity is reused: this bounded
+context consumes trusted identity and seller-scope claims rather than replacing the
+platform identity system.
+
+All numeric limits, thresholds, currencies, and objectives are owned by
+`BUSINESS_CONSTANTS.md`. P00 does not invent, duplicate, or resolve a product-owner
+decision marked `<<SET>>`. A later deterministic policy must not be implemented when
+it requires an unresolved constant; that restriction does not prevent the P00
+architecture freeze or the P01-P04 foundations from proceeding.
+
 ## Scope
 
 ### Bounded context: Marketing & Advertising
@@ -121,7 +134,7 @@ Presentation -> Application -> Domain <- Infrastructure
 ~~~
 
 - Presentation contains FastAPI endpoints, request parsing, authentication dependencies, and result mapping. It never implements policy or performs a direct integration call.
-- Application coordinates use cases, transaction boundaries, authorization checks, orchestration, and calls into domain policies and ports.
+- Application coordinates use cases, transaction boundaries, authorization checks, orchestration, and calls into domain policies and ports. It depends only on provider-neutral port contracts; it must not import MCP protocol details or Meta SDK types.
 - Domain contains entities, value objects, state machines, deterministic policies, and repository/gateway contracts. It is independent of FastAPI, SQLAlchemy, Celery, LangGraph, Meta, and LLM SDKs.
 - Infrastructure implements the domain/application contracts for PostgreSQL, Redis, cryptography, Meta, LLM providers, and existing internal services.
 
@@ -178,6 +191,29 @@ Authorized Context
 
 LangGraph coordinates explicit nodes and transitions, not an autonomous agent swarm. Read-only tools can run only with authorized, sanitized context. A write-capable tool cannot be invoked directly by a model: the application must create an approved, idempotent execution and then invoke the Meta gateway.
 
+### Mandatory write-action safety gate
+
+An authorized read tool may execute automatically when it is constrained to
+tenant-scoped, sanitized data. Every financially sensitive write follows this fixed
+sequence; no LLM output or queue delivery can skip a step:
+
+1. **Authorization** — validate the trusted principal, seller scope, RBAC, ownership,
+   and selected ABAC policies.
+2. **Current authoritative data** — load PostgreSQL-backed state and refresh the
+   required policy-relevant commerce or Meta context.
+3. **Deterministic business validation** — apply non-LLM rules for state, budget,
+   stock, permissions, and other applicable business constraints.
+4. **Exact-payload human approval** — bind the seller decision to the canonical
+   payload version, hash, scope, and expiry.
+5. **Idempotency** — durably record the logical mutation, idempotency key, and intent
+   before dispatch.
+6. **External execution** — invoke the typed `MetaAdsGateway` through the application
+   use case; no domain or application code calls MCP or Meta SDK details directly.
+7. **Verification or reconciliation** — verify a confirmed result or reconcile an
+   ambiguous result before claiming a final outcome or retrying.
+8. **Audit** — retain tenant-scoped evidence for the decision, execution, state
+   transition, and outcome without storing secrets.
+
 ### Performance and profitability flow
 
 Scheduled workers retrieve permitted Meta performance data, store immutable or versioned snapshots, and join it with authorized commerce facts. Seller-facing analysis must distinguish observed facts, calculated measures, data freshness, attribution assumptions, and LLM-generated interpretation.
@@ -223,7 +259,7 @@ No execution transition outside this table is valid; it must be rejected as a st
 ## Safety invariants
 
 1. An LLM recommendation is never an authority for permissions, budget, stock, approval, or external mutation.
-2. Seller A cannot access Seller B data, credentials, creatives, campaigns, metrics, approvals, or audit events.
+2. Seller A must never access Seller B campaigns, approvals, creatives, metrics, Meta connections, tokens, recommendations, credentials, audit events, or any other seller-owned data.
 3. Read actions can be automatic only after authorization; write actions require all required controls.
 4. Exact-payload approval binds the seller decision to a version/hash, scope, and expiry. It is not a blanket approval.
 5. Critical financial mutations fail closed without authoritative persistence.

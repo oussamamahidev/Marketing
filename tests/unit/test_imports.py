@@ -2,7 +2,7 @@
 
 PURPOSE: Prove the src-layout package and P01 app factory work without external services.
 RESPONSIBILITY: Tests import and bootstrap behavior only; it does not test future business routes or integrations.
-DEPENDENCIES: FastAPI TestClient and the marketing_ai package.
+DEPENDENCIES: httpx ASGI transport and the marketing_ai package.
 USED BY: P01 quality checks and future regression runs.
 TESTED BY: pytest.
 """
@@ -10,6 +10,7 @@ TESTED BY: pytest.
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 import httpx
 from fastapi import FastAPI
@@ -17,9 +18,24 @@ from fastapi import FastAPI
 import marketing_ai
 from marketing_ai.main import APP_TITLE, app, create_app
 
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+
 
 def test_package_import_exposes_version() -> None:
     assert marketing_ai.__version__ == "0.1.0"
+
+
+def test_binding_context_files_exist_at_repository_root() -> None:
+    required_files = {
+        "PROJECT_CONTEXT.md": "# PROJECT_CONTEXT.md",
+        "BUSINESS_CONSTANTS.md": "# BUSINESS_CONSTANTS.md",
+    }
+
+    for filename, expected_heading in required_files.items():
+        document_path = REPOSITORY_ROOT / filename
+        assert document_path.is_file(), filename
+        document = document_path.read_text(encoding="utf-8")
+        assert document.startswith(expected_heading), filename
 
 
 def test_app_factory_constructs_fastapi_without_external_dependencies() -> None:

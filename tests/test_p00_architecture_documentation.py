@@ -23,6 +23,7 @@ REQUIRED_DOCUMENTS = (
     ARCHITECTURE_DIRECTORY / "overview.md",
     ARCHITECTURE_DIRECTORY / "domain-glossary.md",
     ARCHITECTURE_DIRECTORY / "non-functional-requirements.md",
+    ARCHITECTURE_DIRECTORY / "profitability.md",
     ADR_DIRECTORY / "ADR-001-modular-monolith.md",
     ADR_DIRECTORY / "ADR-002-postgresql.md",
     ADR_DIRECTORY / "ADR-003-langgraph-state-machine.md",
@@ -79,6 +80,7 @@ class P00ArchitectureDocumentationTests(unittest.TestCase):
             "docs/architecture/overview.md",
             "docs/architecture/domain-glossary.md",
             "docs/architecture/non-functional-requirements.md",
+            "docs/architecture/profitability.md",
             "docs/adr/",
         )
 
@@ -414,6 +416,182 @@ class P00ArchitectureDocumentationTests(unittest.TestCase):
         self.assert_contains_all(celery_adr, ("Temporal", "Replacement trigger"))
         self.assert_contains_all(
             monolith_adr, ("selective service", "Replacement trigger")
+        )
+
+    def test_v2_architecture_and_meta_provider_boundaries_are_explicit(self) -> None:
+        overview = self.read_document(ARCHITECTURE_DIRECTORY / "overview.md")
+        requirements = self.read_document(
+            ARCHITECTURE_DIRECTORY / "non-functional-requirements.md"
+        )
+        postgresql_adr = self.read_document(ADR_DIRECTORY / "ADR-002-postgresql.md")
+        celery_adr = self.read_document(
+            ADR_DIRECTORY / "ADR-004-celery-before-temporal.md"
+        )
+        meta_gateway_adr = self.read_document(
+            ADR_DIRECTORY / "ADR-005-meta-gateway-abstraction.md"
+        )
+        combined = (
+            f"{overview}\n{requirements}\n{postgresql_adr}\n{celery_adr}\n"
+            f"{meta_gateway_adr}"
+        )
+
+        self.assert_contains_all(
+            combined,
+            (
+                "existing Maroc Affiliate identity",
+                "Python/FastAPI modular monolith",
+                "PostgreSQL",
+                "Redis",
+                "SQLAlchemy 2.x",
+                "Alembic",
+                "LangGraph",
+                "Celery with Redis",
+                "Temporal",
+                "MetaAdsGateway",
+                "provider-neutral port contracts",
+                "MCP protocol details",
+                "Meta SDK types",
+                "RBAC",
+                "ownership",
+                "selected ABAC policies",
+                "LLM recommendation is never",
+                "Prometheus/Grafana",
+                "error tracking",
+            ),
+        )
+
+    def test_v2_seller_isolation_and_write_action_safety_gate_are_complete(
+        self,
+    ) -> None:
+        overview = self.read_document(ARCHITECTURE_DIRECTORY / "overview.md")
+        safety_gate = overview.split(
+            "### Mandatory write-action safety gate", maxsplit=1
+        )[1].split("### Performance and profitability flow", maxsplit=1)[0]
+
+        self.assert_contains_all(
+            overview,
+            (
+                "Seller A must never access Seller B campaigns, approvals, creatives, metrics, Meta connections, tokens, recommendations",
+                "An authorized read tool may execute automatically",
+            ),
+        )
+
+        required_steps = (
+            "**Authorization**",
+            "**Current authoritative data**",
+            "**Deterministic business validation**",
+            "**Exact-payload human approval**",
+            "**Idempotency**",
+            "**External execution**",
+            "**Verification or reconciliation**",
+            "**Audit**",
+        )
+        previous_index = -1
+        for step in required_steps:
+            with self.subTest(step=step):
+                current_index = safety_gate.index(step)
+                self.assertGreater(current_index, previous_index)
+                previous_index = current_index
+
+    def test_v2_profitability_and_binding_constants_are_documented(self) -> None:
+        overview = self.read_document(ARCHITECTURE_DIRECTORY / "overview.md")
+        requirements = self.read_document(
+            ARCHITECTURE_DIRECTORY / "non-functional-requirements.md"
+        )
+        profitability = self.read_document(ARCHITECTURE_DIRECTORY / "profitability.md")
+        combined = f"{overview}\n{requirements}\n{profitability}"
+
+        self.assert_contains_all(
+            profitability,
+            (
+                "Maroc Affiliate profitability is based on delivered-order economics",
+                "Meta-reported conversions and Meta ROAS are informational",
+                "delivered revenue",
+                "cancellations",
+                "returns",
+                "COGS",
+                "delivery cost",
+                "ad spend",
+                "net_revenue      = sum(delivered_order_value) - sum(returned_order_value)",
+                "true_cost        = ad_spend + (delivered_orders * DELIVERY_COST_PER_ORDER_MAD) + cogs",
+                "delivered_roas   = net_revenue / ad_spend",
+                "contribution     = net_revenue - true_cost",
+                "BREAKEVEN_DELIVERED_ROAS",
+                "never hard-coded",
+                "DELIVERY_COST_PER_ORDER_MAD",
+                "PROFITABILITY_ATTRIBUTION_WINDOW_DAYS",
+                "MIN_DAYS_BEFORE_PERFORMANCE_JUDGEMENT",
+            ),
+        )
+        self.assertNotIn("<<SET>>", profitability)
+        self.assert_contains_all(
+            combined,
+            (
+                "BUSINESS_CONSTANTS.md",
+                "does not invent",
+                "startup must fail with a clear configuration error",
+                "P05 must not implement a deterministic policy",
+                "do not block P00-P04",
+            ),
+        )
+
+    def test_glossary_delivered_order_roas_matches_binding_economics(self) -> None:
+        glossary = self.read_document(ARCHITECTURE_DIRECTORY / "domain-glossary.md")
+        glossary_definition = next(
+            columns[1].strip()
+            for line in glossary.splitlines()
+            if line.startswith("|")
+            and not line.startswith("| ---")
+            and len(columns := line.strip("|").split("|")) == 2
+            and columns[0].strip() == "Delivered-order ROAS"
+        )
+
+        self.assert_contains_all(
+            glossary_definition,
+            (
+                "net_revenue",
+                "delivered_order_value",
+                "returned_order_value",
+                "delivered_roas",
+                "ad_spend",
+                "Delivered-order profitability",
+            ),
+        )
+        self.assertRegex(
+            glossary_definition,
+            r"net_revenue\s*=\s*sum\(delivered_order_value\)\s*-\s*"
+            r"sum\(returned_order_value\)",
+        )
+        self.assertRegex(
+            glossary_definition,
+            r"delivered_roas\s*=\s*net_revenue\s*/\s*ad_spend",
+        )
+
+    def test_v2_meta_launch_risks_start_early_in_parallel_with_engineering(
+        self,
+    ) -> None:
+        requirements = self.read_document(
+            ARCHITECTURE_DIRECTORY / "non-functional-requirements.md"
+        )
+        launch_dependencies = requirements.split(
+            "## Meta launch dependencies", maxsplit=1
+        )[1].split("## Edge-case expectations", maxsplit=1)[0]
+
+        self.assert_contains_all(
+            launch_dependencies,
+            (
+                "Meta Business verification",
+                "Meta App Review",
+                "ads_management",
+                "ads_read",
+                "Meta advertising policy compliance",
+                "Review or resubmission delay",
+                "beginning in P00 rather than waiting for the Meta-connection phase",
+            ),
+        )
+        self.assertRegex(
+            launch_dependencies,
+            r"start them early and run them in parallel with\s+engineering",
         )
 
     def test_markdown_tables_have_matching_header_separator_and_row_columns(
