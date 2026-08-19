@@ -1,0 +1,21 @@
+# PURPOSE: Keep local secrets, virtual environments, caches, tests, and repository metadata out of Docker build contexts.
+# RESPONSIBILITY: Limits the build context to files required by the Dockerfile; it does not replace Dockerfile allowlisted COPY instructions.
+# DEPENDENCIES: Docker build context rules and the P01 repository layout.
+# USED BY: docker build and Docker Compose app builds.
+# TESTED BY: P01 Docker build and secret-boundary checks.
+
+.git/
+.venv/
+.env
+.env.*
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+tests/
+docs/
+README.md

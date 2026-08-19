@@ -1,0 +1,32 @@
+# PURPOSE: Keep local secrets, generated environments, caches, and build artifacts out of version control.
+# RESPONSIBILITY: Ignores local/generated files; it must not hide source, documentation, lockfiles, or .env.example.
+# DEPENDENCIES: Local Python, test, editor, and operating-system tooling.
+# USED BY: Git and local developers.
+# TESTED BY: P01 configuration checks.
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Python environments and artifacts
+.venv/
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+build/
+dist/
+
+# Test and quality caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Editor and operating-system files
+.DS_Store
+.idea/
+.vscode/

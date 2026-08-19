@@ -1,0 +1,50 @@
+# PURPOSE: Define the installable src-layout project and its quality-tool contracts.
+# RESPONSIBILITY: Owns packaging, dependency constraints, and local quality configuration; it does not define product behavior.
+# DEPENDENCIES: Python 3.14, uv-compatible PEP 621 metadata, and approved runtime/development tools.
+# USED BY: uv, Ruff, mypy, pytest, Docker builds, and local developers.
+# TESTED BY: tests/unit/test_imports.py and P01 quality checks.
+
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "maroc-affiliate-marketing-ai"
+version = "0.1.0"
+description = "Safety-first AI-assisted Meta advertising subsystem for Maroc Affiliate."
+requires-python = ">=3.14,<3.15"
+dependencies = [
+  "fastapi>=0.139,<1",
+  "uvicorn[standard]>=0.50,<1",
+]
+
+[dependency-groups]
+dev = [
+  "httpx>=0.28,<1",
+  "mypy>=2.3,<3",
+  "pytest>=9.1,<10",
+  "ruff>=0.14,<1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/marketing_ai"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = ["-ra", "--strict-config", "--strict-markers"]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 88
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.14"
+mypy_path = ["src"]
+files = ["src", "tests"]
+strict = true
+warn_unused_configs = true
