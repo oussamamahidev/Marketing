@@ -1,0 +1,16 @@
+# Allow only package/build inputs; .env, VCS, tests and local caches never enter.
+**
+!pyproject.toml
+!uv.lock
+!README.md
+!alembic.ini
+!migrations/
+!migrations/**
+!src/
+!src/marketing_ai/
+!src/marketing_ai/**
+**/__pycache__/
+**/*.pyc
+**/.env*
+**/*.pem
+**/*.key
