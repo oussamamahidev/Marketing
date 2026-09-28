@@ -60,3 +60,10 @@ async def test_platform_admin_flag_does_not_implicitly_cross_tenant_boundary() -
             resource_id=FOREIGN_RESOURCE,
         )
     assert caught.value.code is ErrorCode.RESOURCE_NOT_FOUND
+
+
+def test_seller_context_rejects_an_untyped_or_invalid_tenant_identifier() -> None:
+    from marketing_ai.domain.identity.principal import SellerContext
+
+    with pytest.raises(ValueError):
+        SellerContext(seller_id="not-a-uuid")  # type: ignore[arg-type]

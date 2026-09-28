@@ -68,9 +68,12 @@ async def get_authenticated_principal(
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise ApplicationError(ErrorCode.UNAUTHENTICATED)
     try:
-        return verifier.verify(credentials.credentials)
+        principal = verifier.verify(credentials.credentials)
     except IdentityVerificationError, ValueError, TypeError:
         raise ApplicationError(ErrorCode.UNAUTHENTICATED) from None
+    if not isinstance(principal, Principal):
+        raise ApplicationError(ErrorCode.UNAUTHENTICATED)
+    return principal
 
 
 def require_permission(

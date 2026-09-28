@@ -162,3 +162,109 @@ def test_identity_settings_are_required_and_signing_secret_is_not_serialized(
         values.pop(field)
         with pytest.raises(Exception):
             Settings(_env_file=None, **values)
+
+
+async def test_malformed_verifier_response_fails_closed_as_unauthenticated(
+    app: FastAPI, client: AsyncClient, settings: Settings
+) -> None:
+    """A replaceable adapter cannot broaden access by returning an arbitrary object."""
+    from typing import cast
+
+    from marketing_ai.api.dependencies import get_identity_verifier
+
+    class MalformedVerifier:
+        def verify(self, token: str) -> Principal:
+            return cast(Principal, object())
+
+    app.dependency_overrides[get_identity_verifier] = lambda: MalformedVerifier()
+    protected_endpoint(app)
+    response = await client.get(
+        "/_p04/protected", headers={"Authorization": f"Bearer {signed_identity(settings)}"}
+    )
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "UNAUTHENTICATED"
+
+
+async def test_admin_capability_is_explicit_not_inferred_from_manager_role(
+    app: FastAPI, client: AsyncClient, settings: Settings
+) -> None:
+    @app.get("/_p04/admin")
+    async def admin_only(
+        principal: Annotated[Principal, Depends(require_permission(Permission.ADS_ADMIN))],
+    ) -> dict[str, str]:
+        return {"user_id": str(principal.user_id)}
+
+    manager = signed_identity(settings, roles=["ads_manager"])
+    denied = await client.get("/_p04/admin", headers={"Authorization": f"Bearer {manager}"})
+    assert denied.status_code == 403
+    assert denied.json()["error"]["code"] == "FORBIDDEN"
+
+    admin = signed_identity(settings, roles=["ads_admin"])
+    allowed = await client.get("/_p04/admin", headers={"Authorization": f"Bearer {admin}"})
+    assert allowed.status_code == 200
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"user_id": "00000000-0000-0000-0000-000000000099"},
+        {"roles": ["ads_viewer", "ads_viewer"]},
+        {"permissions": ["ads.read", "ads.read"]},
+        {"permissions": "ads.manage"},
+        {"is_platform_admin": 1},
+        {"aud": []},
+    ],
+)
+async def test_invalid_identity_claim_shapes_fail_closed(
+    app: FastAPI, client: AsyncClient, settings: Settings, changes: dict[str, object]
+) -> None:
+    protected_endpoint(app)
+    token = signed_identity(settings, **changes)
+    response = await client.get("/_p04/protected", headers={"Authorization": f"Bearer {token}"})
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "UNAUTHENTICATED"
+    assert token not in response.text
+
+
+async def test_audience_array_and_direct_permission_claim_are_valid(
+    app: FastAPI, client: AsyncClient, settings: Settings
+) -> None:
+    protected_endpoint(app)
+    token = signed_identity(
+        settings,
+        aud=["unrelated-service", settings.IDENTITY_JWT_AUDIENCE],
+        roles=[],
+        permissions=["ads.manage"],
+    )
+    response = await client.get("/_p04/protected", headers={"Authorization": f"Bearer {token}"})
+    assert response.status_code == 200
+
+
+async def test_duplicate_json_claim_and_raw_token_are_not_accepted_or_logged(
+    app: FastAPI, client: AsyncClient, settings: Settings, capsys: pytest.CaptureFixture[str]
+) -> None:
+    protected_endpoint(app)
+    header = compact_json({"alg": "HS256", "typ": "JWT"})
+    raw_claims = (
+        '{"iss":"untrusted","iss":"'
+        + settings.IDENTITY_JWT_ISSUER
+        + '","aud":"'
+        + settings.IDENTITY_JWT_AUDIENCE
+        + '","sub":"'
+        + USER_ID
+        + '","seller_id":"'
+        + SELLER_ID
+        + '","roles":[],"permissions":[],"exp":9999999999}'
+    )
+    payload = base64.urlsafe_b64encode(raw_claims.encode()).rstrip(b"=").decode("ascii")
+    signature = hmac.digest(
+        settings.IDENTITY_JWT_HS256_SECRET.get_secret_value().encode(),
+        f"{header}.{payload}".encode("ascii"),
+        hashlib.sha256,
+    )
+    token = f"{header}.{payload}.{base64.urlsafe_b64encode(signature).rstrip(b'=').decode('ascii')}"
+    response = await client.get("/_p04/protected", headers={"Authorization": f"Bearer {token}"})
+    captured = capsys.readouterr()
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "UNAUTHENTICATED"
+    assert token not in response.text + captured.out + captured.err

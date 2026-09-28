@@ -64,3 +64,50 @@ async def test_scoped_lookup_always_receives_verified_seller_id() -> None:
     )
     assert result == "owned"
     assert calls == [(SELLER_ID, resource_id)]
+
+
+@pytest.mark.parametrize(
+    ("role", "permission", "allowed"),
+    [
+        (Role.ADS_VIEWER, Permission.ADS_READ, True),
+        (Role.ADS_VIEWER, Permission.ADS_MANAGE, False),
+        (Role.ADS_MANAGER, Permission.ADS_MANAGE, True),
+        (Role.ADS_MANAGER, Permission.ADS_APPROVE, False),
+        (Role.ADS_APPROVER, Permission.ADS_APPROVE, True),
+        (Role.ADS_APPROVER, Permission.ADS_ADMIN, False),
+        (Role.ADS_ADMIN, Permission.ADS_ADMIN, True),
+    ],
+)
+def test_permission_matrix(role: Role, permission: Permission, allowed: bool) -> None:
+    caller = principal(role)
+    if allowed:
+        assert authorize(caller, permission) is caller
+    else:
+        with pytest.raises(ApplicationError) as caught:
+            authorize(caller, permission)
+        assert caught.value.code is ErrorCode.FORBIDDEN
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"user_id": "not-a-uuid"},
+        {"seller_id": "not-a-uuid"},
+        {"roles": frozenset({"ads_viewer"})},
+        {"permissions": frozenset({"ads.read"})},
+        {"is_platform_admin": 1},
+    ],
+)
+def test_principal_rejects_invalid_identifiers_and_identity_values(
+    changes: dict[str, object],
+) -> None:
+    values: dict[str, object] = {
+        "user_id": USER_ID,
+        "seller_id": SELLER_ID,
+        "roles": frozenset(),
+        "permissions": frozenset(),
+        "is_platform_admin": False,
+    }
+    values.update(changes)
+    with pytest.raises(ValueError):
+        Principal(**values)  # type: ignore[arg-type]

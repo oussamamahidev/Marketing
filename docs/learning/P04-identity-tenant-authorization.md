@@ -101,7 +101,7 @@ The first adversarial signature test found that a noncanonical base64url final c
 
 ## 23. Verification Evidence
 
-On 2026-09-22, `pytest -q` passed 278 tests, `pytest -q -m database` passed 17 disposable PostgreSQL tests, `pytest -q -m container` passed 3 isolated image tests, and Ruff plus strict mypy passed. The formal P04 testing and validation prompts have not yet been supplied; this document records implementation evidence, not a substitute for those later gates.
+On 2026-09-22, the supplied formal P04 testing and validation prompts passed: 44 focused identity/permission/tenant tests, 302 default tests, 17 disposable PostgreSQL tests, 3 isolated image tests, Ruff, formatting, and strict mypy. Adversarial testing fixed malformed verifier output and invalid direct seller-context construction; see the P04 validation report.
 
 ## 24. Remaining Integration Work
 

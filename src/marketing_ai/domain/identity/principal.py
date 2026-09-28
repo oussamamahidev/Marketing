@@ -47,6 +47,10 @@ class SellerContext:
 
     seller_id: UUID
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.seller_id, UUID):
+            raise ValueError("Seller context identifier must be a UUID")
+
     @classmethod
     def from_principal(cls, principal: Principal) -> "SellerContext":
         if not isinstance(principal, Principal):
