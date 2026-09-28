@@ -6,6 +6,7 @@ values have no fallback; main loads them before serving. Tested in test_config.
 
 from decimal import Decimal
 from typing import Annotated, Literal, Self
+from urllib.parse import urlsplit
 
 from pydantic import Field, SecretStr, ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -43,6 +44,14 @@ class Settings(BaseSettings):
     IDENTITY_JWT_ISSUER: NonEmptyText
     IDENTITY_JWT_AUDIENCE: NonEmptyText
     IDENTITY_JWT_HS256_SECRET: SecretStr = Field(repr=False, exclude=True)
+    CATALOG_SERVICE_BASE_URL: str | None = None
+    INVENTORY_SERVICE_BASE_URL: str | None = None
+    ORDERS_SERVICE_BASE_URL: str | None = None
+    CONTENT_HUB_SERVICE_BASE_URL: str | None = None
+    INTERNAL_SERVICE_IDENTITY: SecretStr | None = Field(default=None, repr=False, exclude=True)
+    INTERNAL_READ_TIMEOUT_SECONDS: PositiveInt | None = None
+    INTERNAL_READ_MAX_RETRIES: NonnegativeInt | None = None
+    CONTENT_HUB_APPROVED_STORAGE_HOSTS: tuple[NonEmptyText, ...] = ()
 
     PLATFORM_CURRENCY: Literal["MAD"] = "MAD"
     MONEY_STORAGE: Literal["integer centimes"] = "integer centimes"
@@ -115,6 +124,35 @@ class Settings(BaseSettings):
             raise ValueError("Identity issuer and audience cannot be blank")
         return value
 
+    @field_validator(
+        "CATALOG_SERVICE_BASE_URL",
+        "INVENTORY_SERVICE_BASE_URL",
+        "ORDERS_SERVICE_BASE_URL",
+        "CONTENT_HUB_SERVICE_BASE_URL",
+    )
+    @classmethod
+    def validate_internal_service_base_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        parsed = urlsplit(value)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.netloc
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError("Internal service URL must be an origin without credentials or query")
+        return value.rstrip("/")
+
+    @field_validator("CONTENT_HUB_APPROVED_STORAGE_HOSTS")
+    @classmethod
+    def validate_storage_hosts(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if any("/" in host or ":" in host or host != host.lower() for host in value):
+            raise ValueError("Approved storage hosts must be lowercase host names")
+        return value
+
     @field_validator("IDENTITY_JWT_HS256_SECRET")
     @classmethod
     def reject_blank_identity_secret(cls, value: SecretStr) -> SecretStr:
@@ -138,6 +176,26 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_policy_relationships(self) -> Self:
+        configured_service_urls = (
+            self.CATALOG_SERVICE_BASE_URL,
+            self.INVENTORY_SERVICE_BASE_URL,
+            self.ORDERS_SERVICE_BASE_URL,
+            self.CONTENT_HUB_SERVICE_BASE_URL,
+        )
+        shared_read_configuration = (
+            self.INTERNAL_SERVICE_IDENTITY,
+            self.INTERNAL_READ_TIMEOUT_SECONDS,
+            self.INTERNAL_READ_MAX_RETRIES,
+        )
+        if any(configured_service_urls) and any(
+            value is None for value in shared_read_configuration
+        ):
+            raise ValueError(
+                "Internal service clients require identity, timeout, and retry configuration"
+            )
+        if self.CONTENT_HUB_SERVICE_BASE_URL and not self.CONTENT_HUB_APPROVED_STORAGE_HOSTS:
+            raise ValueError("Content Hub requires approved storage hosts")
+
         if not self.BUDGET_CHANGE_REQUIRES_APPROVAL:
             raise ValueError("BUDGET_CHANGE_REQUIRES_APPROVAL must remain enabled")
         if not (
