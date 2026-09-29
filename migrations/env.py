@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from marketing_ai.core.config import load_settings
 from marketing_ai.infrastructure.database.base import Base
+from marketing_ai.infrastructure.database.models import meta as meta_models  # noqa: F401
 
 settings = load_settings()
 target_metadata = Base.metadata

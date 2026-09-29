@@ -9,7 +9,7 @@ TESTED BY: tests/contract/internal/test_*_contract.py.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from time import perf_counter
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Mapping
@@ -36,14 +36,21 @@ READ_DURATION = Histogram(
 @dataclass(frozen=True)
 class InternalReadClientConfig:
     base_url: str
-    service_identity: str
+    service_identity: str = field(repr=False)
     timeout_seconds: int
     max_retries: int
 
     def __post_init__(self) -> None:
         if not isinstance(self.base_url, str):
             raise ValueError("Internal read client requires a credential-free HTTP origin")
+            raise ValueError("Internal read client requires a credential-free HTTP origin")
         parsed = urlsplit(self.base_url)
+        try:
+            parsed.port
+        except ValueError:
+            raise ValueError(
+                "Internal read client requires a credential-free HTTP origin"
+            ) from None
         if (
             not isinstance(self.base_url, str)
             or parsed.scheme not in {"http", "https"}
@@ -52,6 +59,7 @@ class InternalReadClientConfig:
             or parsed.password is not None
             or parsed.query
             or parsed.fragment
+            or parsed.path not in {"", "/"}
         ):
             raise ValueError("Internal read client requires a credential-free HTTP origin")
         if not isinstance(self.service_identity, str) or not self.service_identity.strip():

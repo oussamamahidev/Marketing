@@ -47,7 +47,7 @@ def test_empty_database_migrates_to_head_and_matches_metadata(migration_config: 
         try:
             async with database.engine.connect() as connection:
                 tables = await connection.run_sync(lambda conn: inspect(conn).get_table_names())
-                assert tables == ["alembic_version"]
+                assert tables == ["alembic_version", "meta_connections", "meta_ad_account_links"]
                 assert await connection.scalar(
                     text("SELECT version_num FROM alembic_version")
                 ) == single_head(migration_config)

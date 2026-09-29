@@ -152,7 +152,7 @@ while True:
     try:
         with urlopen('http://127.0.0.1:8000/openapi.json', timeout=2) as response:
             assert response.status == 200
-            assert set(json.load(response)['paths']) == {'/health/live', '/health/ready'}
+            assert set(json.load(response)['paths']) == {'/health/live', '/health/ready', '/meta/connections', '/meta/connections/start', '/meta/connections/{connection_id}'}
         break
     except URLError:
         if time.monotonic() >= deadline:

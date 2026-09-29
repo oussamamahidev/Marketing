@@ -67,3 +67,23 @@ async def test_content_hub_rejects_unapproved_or_non_https_media_without_fetchin
                 approved_storage_hosts=frozenset({"media.approved.test"}),
             ).get_creative(seller_id=seller_id, creative_id=creative_id)
     assert raised.value.code == ErrorCode.UPSTREAM_INVALID_RESPONSE
+
+
+@pytest.mark.anyio
+async def test_content_hub_hides_foreign_creative_existence() -> None:
+    seller_id, foreign_seller_id, creative_id = uuid4(), uuid4(), uuid4()
+    config = InternalReadClientConfig("https://content.internal.test", "marketing-ai", 1, 0)
+    payload = creative_payload(
+        foreign_seller_id, creative_id, "https://media.approved.test/path.jpg"
+    )
+    async with httpx2.AsyncClient(
+        transport=httpx2.MockTransport(lambda request: httpx2.Response(200, json=payload))
+    ) as http_client:
+        with pytest.raises(ApplicationError) as raised:
+            await ContentHubClient(
+                ReadOnlyInternalClient(
+                    service="content_hub", config=config, http_client=http_client
+                ),
+                approved_storage_hosts=frozenset({"media.approved.test"}),
+            ).get_creative(seller_id=seller_id, creative_id=creative_id)
+    assert raised.value.code == ErrorCode.RESOURCE_NOT_FOUND

@@ -43,7 +43,13 @@ def test_factory_creates_independent_apps(app: FastAPI, settings: Settings) -> N
 async def test_startup_and_openapi_have_no_business_routes(client: AsyncClient) -> None:
     response = await client.get("/openapi.json")
     assert response.status_code == 200
-    assert set(response.json()["paths"]) == {"/health/live", "/health/ready"}
+    assert set(response.json()["paths"]) == {
+        "/health/live",
+        "/health/ready",
+        "/meta/connections",
+        "/meta/connections/start",
+        "/meta/connections/{connection_id}",
+    }
     assert (await client.get("/docs")).status_code == 200
     assert (await client.get("/redoc")).status_code == 200
     assert (await client.get("/")).status_code == 404
@@ -98,7 +104,13 @@ def test_only_framework_docs_and_health_routes_exist(app: FastAPI) -> None:
         "/docs/oauth2-redirect",
         "/redoc",
     }
-    assert set(app.openapi()["paths"]) == {"/health/live", "/health/ready"}
+    assert set(app.openapi()["paths"]) == {
+        "/health/live",
+        "/health/ready",
+        "/meta/connections",
+        "/meta/connections/start",
+        "/meta/connections/{connection_id}",
+    }
     assert app.debug is False
 
 

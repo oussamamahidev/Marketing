@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     IDENTITY_JWT_ISSUER: NonEmptyText
     IDENTITY_JWT_AUDIENCE: NonEmptyText
     IDENTITY_JWT_HS256_SECRET: SecretStr = Field(repr=False, exclude=True)
+    META_OAUTH_STATE_SIGNING_SECRET: SecretStr | None = Field(
+        default=None, repr=False, exclude=True
+    )
+    META_OAUTH_STATE_TTL_SECONDS: PositiveInt | None = None
     CATALOG_SERVICE_BASE_URL: str | None = None
     INVENTORY_SERVICE_BASE_URL: str | None = None
     ORDERS_SERVICE_BASE_URL: str | None = None
@@ -135,6 +139,12 @@ class Settings(BaseSettings):
         if value is None:
             return None
         parsed = urlsplit(value)
+        try:
+            parsed.port
+        except ValueError:
+            raise ValueError(
+                "Internal service URL must be an origin without credentials or query"
+            ) from None
         if (
             parsed.scheme not in {"http", "https"}
             or not parsed.netloc
@@ -142,6 +152,7 @@ class Settings(BaseSettings):
             or parsed.password is not None
             or parsed.query
             or parsed.fragment
+            or parsed.path not in {"", "/"}
         ):
             raise ValueError("Internal service URL must be an origin without credentials or query")
         return value.rstrip("/")
@@ -160,6 +171,13 @@ class Settings(BaseSettings):
             raise ValueError("Identity signing secret cannot be blank")
         return value
 
+    @field_validator("META_OAUTH_STATE_SIGNING_SECRET")
+    @classmethod
+    def reject_blank_meta_state_secret(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None and not value.get_secret_value().strip():
+            raise ValueError("Meta OAuth state signing secret cannot be blank")
+        return value
+
     @field_validator(
         "MIN_DAILY_BUDGET_MAD",
         "MAX_DAILY_BUDGET_MAD",
@@ -176,6 +194,10 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_policy_relationships(self) -> Self:
+        if (self.META_OAUTH_STATE_SIGNING_SECRET is None) != (
+            self.META_OAUTH_STATE_TTL_SECONDS is None
+        ):
+            raise ValueError("Meta OAuth state signing secret and TTL must be configured together")
         configured_service_urls = (
             self.CATALOG_SERVICE_BASE_URL,
             self.INVENTORY_SERVICE_BASE_URL,

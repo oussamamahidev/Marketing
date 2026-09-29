@@ -170,3 +170,133 @@ async def test_client_settings_factory_requires_complete_typed_configuration(
     async with httpx2.AsyncClient() as http_client:
         client = CatalogClient.from_settings(settings=configured, http_client=http_client)
         assert isinstance(client, CatalogClient)
+
+
+def test_transport_config_rejects_paths_and_does_not_reveal_service_identity() -> None:
+    with pytest.raises(ValueError):
+        InternalReadClientConfig("https://catalog.internal.test/unexpected", "identity", 1, 0)
+    with pytest.raises(ValueError):
+        InternalReadClientConfig("https://catalog.internal.test:bad", "identity", 1, 0)
+
+    config = InternalReadClientConfig("https://catalog.internal.test", "identity-canary", 1, 0)
+    assert "identity-canary" not in repr(config)
+
+
+def test_catalog_requires_margin_input_for_financial_policy() -> None:
+    seller_id, product_id = uuid4(), uuid4()
+    with pytest.raises(ApplicationError) as missing_margin:
+        CatalogProduct.from_payload(
+            product_payload(seller_id, product_id) | {"gross_margin_pct": None}
+        )
+    assert missing_margin.value.code == ErrorCode.UPSTREAM_INVALID_RESPONSE
+
+
+@pytest.mark.anyio
+async def test_context_rejects_foreign_facts_from_a_replacement_reader() -> None:
+    seller_id, foreign_seller_id, product_id, creative_id = uuid4(), uuid4(), uuid4(), uuid4()
+    product = CatalogProduct.from_payload(product_payload(foreign_seller_id, product_id))
+    inventory = InventorySummary(product_id, seller_id, available_units=1, warehouse_count=1)
+    outcomes = OrderOutcomeSummary(
+        product_id,
+        seller_id,
+        orders_in_sample=0,
+        cancellation_rate_pct=Decimal("0"),
+        return_rate_pct=Decimal("0"),
+    )
+    creative = CreativeMetadata(
+        creative_id, seller_id, "Creative", "https://media.test/a.jpg", "image"
+    )
+
+    class Readers:
+        async def get_product(self, *, seller_id: UUID, product_id: UUID) -> CatalogProduct:
+            return product
+
+        async def get_summary(self, *, seller_id: UUID, product_id: UUID) -> InventorySummary:
+            return inventory
+
+        async def get_outcome_summary(
+            self, *, seller_id: UUID, product_id: UUID
+        ) -> OrderOutcomeSummary:
+            return outcomes
+
+        async def get_creative(self, *, seller_id: UUID, creative_id: UUID) -> CreativeMetadata:
+            return creative
+
+    readers = Readers()
+    with pytest.raises(ApplicationError) as foreign_context:
+        await ProductAdvertisingContextService(
+            catalog=readers, inventory=readers, orders=readers, content_hub=readers
+        ).get_context(seller_id=seller_id, product_id=product_id, creative_id=creative_id)
+    assert foreign_context.value.code == ErrorCode.RESOURCE_NOT_FOUND
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("status_code", "expected_code"),
+    [(429, ErrorCode.RATE_LIMITED), (401, ErrorCode.FORBIDDEN)],
+)
+async def test_catalog_translates_rate_and_service_identity_failures(
+    status_code: int, expected_code: ErrorCode
+) -> None:
+    seller_id, product_id = uuid4(), uuid4()
+    async with httpx2.AsyncClient(
+        transport=httpx2.MockTransport(lambda request: httpx2.Response(status_code))
+    ) as http_client:
+        catalog = CatalogClient(
+            ReadOnlyInternalClient(service="catalog", config=config(), http_client=http_client)
+        )
+        with pytest.raises(ApplicationError) as raised:
+            await catalog.get_product(seller_id=seller_id, product_id=product_id)
+    assert raised.value.code == expected_code
+
+
+@pytest.mark.anyio
+async def test_catalog_translates_connection_failure_after_bounded_retries() -> None:
+    seller_id, product_id = uuid4(), uuid4()
+    calls = 0
+
+    async def unavailable(request: httpx2.Request) -> httpx2.Response:
+        nonlocal calls
+        calls += 1
+        raise httpx2.ConnectError("synthetic connection failure", request=request)
+
+    async with httpx2.AsyncClient(transport=httpx2.MockTransport(unavailable)) as http_client:
+        catalog = CatalogClient(
+            ReadOnlyInternalClient(service="catalog", config=config(), http_client=http_client)
+        )
+        with pytest.raises(ApplicationError) as raised:
+            await catalog.get_product(seller_id=seller_id, product_id=product_id)
+    assert raised.value.code == ErrorCode.DEPENDENCY_UNAVAILABLE
+    assert calls == config().max_retries + 1
+
+
+@pytest.mark.anyio
+async def test_context_returns_no_partial_result_when_one_required_read_fails() -> None:
+    seller_id, product_id, creative_id = uuid4(), uuid4(), uuid4()
+    product = CatalogProduct.from_payload(product_payload(seller_id, product_id))
+    inventory = InventorySummary(product_id, seller_id, available_units=1, warehouse_count=1)
+    creative = CreativeMetadata(
+        creative_id, seller_id, "Creative", "https://media.test/a.jpg", "image"
+    )
+
+    class Readers:
+        async def get_product(self, *, seller_id: UUID, product_id: UUID) -> CatalogProduct:
+            return product
+
+        async def get_summary(self, *, seller_id: UUID, product_id: UUID) -> InventorySummary:
+            return inventory
+
+        async def get_outcome_summary(
+            self, *, seller_id: UUID, product_id: UUID
+        ) -> OrderOutcomeSummary:
+            raise ApplicationError(ErrorCode.DEPENDENCY_UNAVAILABLE)
+
+        async def get_creative(self, *, seller_id: UUID, creative_id: UUID) -> CreativeMetadata:
+            return creative
+
+    readers = Readers()
+    with pytest.raises(ApplicationError) as raised:
+        await ProductAdvertisingContextService(
+            catalog=readers, inventory=readers, orders=readers, content_hub=readers
+        ).get_context(seller_id=seller_id, product_id=product_id, creative_id=creative_id)
+    assert raised.value.code == ErrorCode.DEPENDENCY_UNAVAILABLE

@@ -182,3 +182,11 @@ Compose evaluates variable interpolation for every service before applying profi
 ## P05 implementation verification
 
 P05 adds the framework-independent advertising domain: immutable money, budget, and payload values; seller-scoped advertising entities and repository protocols; deterministic eligibility, budget, ownership, CTA, stock, and exact-approval policies; and an explicit campaign lifecycle with reconciliation for ambiguous outcomes. The supplied P05 testing and validation prompts pass: 13 focused domain tests, 315 default tests, 81 security/API tests, 17 disposable PostgreSQL tests, isolated Docker regression tests, Ruff, formatting, and strict mypy. Adversarial testing fixed rejection of negative seller-active budget totals and typed validation for malformed snapshot order counts. See the [P05 learning document](docs/learning/P05-advertising-domain.md) and [campaign state-machine contract](docs/architecture/campaign-state-machine.md).
+
+## P06 implementation verification
+
+P06 adds read-only, seller-scoped adapters for Catalog, Inventory, Orders, and Content Hub plus concurrent product-context aggregation. Responses are mapped to typed schemas; unsafe Content Hub URLs and foreign seller data are rejected. The supplied P06 testing and validation prompts pass: 18 focused contract tests, 333 default tests, 81 security/API tests, 17 disposable PostgreSQL tests, isolated Docker regression, Ruff, formatting, and strict mypy. Adversarial testing fixed invalid service origins, service-identity representation exposure, missing margin input, and foreign facts from replacement readers. See the [P06 learning document](docs/learning/P06-read-only-core-adapters.md).
+
+## P07 implementation verification
+
+P07 adds a seller-scoped Meta connection lifecycle with signed replay-resistant OAuth state, encrypted-vault references instead of credential plaintext, tenant-scoped listing, and immediate durable local revocation. The runtime requires protected OAuth state configuration and a deployment-composed credential vault; it never supplies a test vault in production. See the [P07 learning document](docs/learning/P07-meta-connection-lifecycle.md).

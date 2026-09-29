@@ -52,10 +52,10 @@ def test_database_limits_cannot_be_unbounded(
         Settings(_env_file=None, **(settings_values | {field: value}))
 
 
-def test_foundation_metadata_has_no_business_tables_and_single_head() -> None:
-    assert not Base.metadata.tables
+def test_meta_metadata_and_single_head() -> None:
+    assert set(Base.metadata.tables) == {"meta_connections", "meta_ad_account_links"}
     config = Config(str(Path(__file__).resolve().parents[2] / "alembic.ini"))
-    assert single_head(config) == "0001_persistence_foundation"
+    assert single_head(config) == "0002_create_meta_connections"
 
 
 @pytest.mark.anyio

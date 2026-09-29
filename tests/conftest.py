@@ -11,6 +11,8 @@ from httpx2 import ASGITransport, AsyncClient
 from marketing_ai.core.config import Settings
 from marketing_ai.main import create_app
 
+pytest_plugins = ("tests.support.postgres",)
+
 
 @pytest.fixture
 def database_test_values() -> dict[str, str]:
@@ -32,6 +34,8 @@ def identity_test_values() -> dict[str, str]:
         "IDENTITY_JWT_ISSUER": "https://identity.test.maroc-affiliate",
         "IDENTITY_JWT_AUDIENCE": "marketing-ai-test",
         "IDENTITY_JWT_HS256_SECRET": "p04-test-signing-secret",
+        "META_OAUTH_STATE_SIGNING_SECRET": "p07-test-state-secret",
+        "META_OAUTH_STATE_TTL_SECONDS": "60",
     }
 
 

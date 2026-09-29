@@ -249,3 +249,24 @@ def test_real_factory_startup_rejects_bad_environment_without_leaking(
     assert result.returncode != 0
     assert "ConfigurationError" in result.stderr and "ENVIRONMENT" in result.stderr
     assert "p02-startup-secret-canary" not in result.stdout + result.stderr
+
+
+def test_meta_oauth_settings_require_secret_and_ttl_together(
+    settings_values: dict[str, Any],
+) -> None:
+    with pytest.raises(ValidationError, match="configured together"):
+        Settings(
+            _env_file=None,
+            **(
+                settings_values
+                | {"META_OAUTH_STATE_SIGNING_SECRET": "test", "META_OAUTH_STATE_TTL_SECONDS": None}
+            ),
+        )
+    with pytest.raises(ValidationError, match="cannot be blank"):
+        Settings(
+            _env_file=None,
+            **(
+                settings_values
+                | {"META_OAUTH_STATE_SIGNING_SECRET": "   ", "META_OAUTH_STATE_TTL_SECONDS": "60"}
+            ),
+        )

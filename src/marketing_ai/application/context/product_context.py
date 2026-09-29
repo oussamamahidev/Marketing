@@ -15,6 +15,8 @@ from decimal import Decimal
 from typing import Protocol
 from uuid import UUID
 
+from marketing_ai.core.errors import ApplicationError, ErrorCode
+
 
 class ProductMetadata(Protocol):
     @property
@@ -30,7 +32,7 @@ class ProductMetadata(Protocol):
     def price_centimes(self) -> int: ...
 
     @property
-    def gross_margin_pct(self) -> Decimal | None: ...
+    def gross_margin_pct(self) -> Decimal: ...
 
 
 class InventoryMetadata(Protocol):
@@ -133,6 +135,15 @@ class ProductAdvertisingContextService:
             self._orders.get_outcome_summary(seller_id=seller_id, product_id=product_id),
             self._content_hub.get_creative(seller_id=seller_id, creative_id=creative_id),
         )
+        resources = (product, inventory, order_outcomes, creative)
+        if any(resource.seller_id != seller_id for resource in resources):
+            raise ApplicationError(ErrorCode.RESOURCE_NOT_FOUND)
+        if any(
+            resource.product_id != product_id for resource in (product, inventory, order_outcomes)
+        ):
+            raise ApplicationError(ErrorCode.UPSTREAM_INVALID_RESPONSE)
+        if creative.creative_id != creative_id:
+            raise ApplicationError(ErrorCode.UPSTREAM_INVALID_RESPONSE)
         return ProductAdvertisingContext(
             seller_id=seller_id,
             product=product,
